@@ -1,0 +1,102 @@
+
+-- PURPLE NIGHT | RAYFIELD EDITION
+
+local Rayfield = loadstring(game:HttpGet(
+    "https://sirius.menu/rayfield"
+))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Purple Night",
+    LoadingTitle = "Purple Night",
+    LoadingSubtitle = "by PurpleNight",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "PurpleNight",
+        FileName = "Settings"
+    },
+    KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+local VisualTab = Window:CreateTab("Visuals", 4483362458)
+local SettingsTab = Window:CreateTab("Settings", 4483362458)
+
+local enabled = true
+local espEnabled = false
+local targetLock = false
+local triggerMode = false
+
+MainTab:CreateSection("Main Controls")
+
+MainTab:CreateToggle({
+    Name = "Master Switch",
+    CurrentValue = true,
+    Callback = function(value)
+        enabled = value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "NPC Target Lock",
+    CurrentValue = false,
+    Callback = function(value)
+        targetLock = value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "NPC Trigger Mode",
+    CurrentValue = false,
+    Callback = function(value)
+        triggerMode = value
+    end
+})
+
+VisualTab:CreateSection("Visual Settings")
+
+VisualTab:CreateToggle({
+    Name = "NPC ESP",
+    CurrentValue = false,
+    Callback = function(value)
+        espEnabled = value
+    end
+})
+
+local highlights = {}
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    for _, npc in ipairs(workspace:GetChildren()) do
+        if npc:IsA("Model")
+        and npc:FindFirstChildOfClass("Humanoid")
+        and not game.Players:GetPlayerFromCharacter(npc) then
+
+            if enabled and espEnabled then
+                if not highlights[npc] then
+                    local h = Instance.new("Highlight")
+                    h.FillColor = Color3.fromRGB(145, 60, 255)
+                    h.OutlineColor = Color3.fromRGB(220, 180, 255)
+                    h.Parent = npc
+                    highlights[npc] = h
+                end
+            elseif highlights[npc] then
+                highlights[npc]:Destroy()
+                highlights[npc] = nil
+            end
+        end
+    end
+end)
+
+SettingsTab:CreateSection("Interface")
+
+SettingsTab:CreateButton({
+    Name = "Destroy GUI",
+    Callback = function()
+        Rayfield:Destroy()
+    end
+})
+
+Rayfield:Notify({
+    Title = "Purple Night",
+    Content = "Rayfield loaded successfully!",
+    Duration = 5
+})
