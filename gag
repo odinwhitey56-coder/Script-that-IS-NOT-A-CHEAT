@@ -1,0 +1,98 @@
+local Rayfield = loadstring(
+    game:HttpGet("https://sirius.menu/gen2")
+)()
+
+local Window = Rayfield:CreateWindow({
+    name = "Odin Hub",
+    subtitle = "Aimbot & ESP",
+    sidebarLayout = true,
+    configuration = {
+        autoSave = true,
+        autoLoad = true,
+        fileName = "OdinHub"
+    }
+})
+
+-- MAIN TAB
+local Main = Window:CreateTab({
+    name = "Main",
+    icon = 93364949241311
+})
+
+Main:CreateSection({name = "Visuals"})
+
+Main:CreateToggle({
+    name = "ESP",
+    value = true,
+    callback = function(value)
+        print("ESP:", value)
+    end
+})
+
+Main:CreateToggle({
+    name = "Player Names",
+    value = true,
+    callback = function(value)
+        print("Names:", value)
+    end
+})
+
+Main:CreateToggle({
+    name = "Health Display",
+    value = true,
+    callback = function(value)
+        print("Health:", value)
+    end
+})
+
+Main:CreateSection({name = "Aiming"})
+
+Main:CreateToggle({
+    name = "Aimbot",
+    value = false,
+    callback = function(value)
+        print("Aimbot:", value)
+    end
+})
+
+Main:CreateSlider({
+    name = "FOV Radius",
+    range = {50, 500},
+    increment = 10,
+    value = 150,
+    callback = function(value)
+        print("FOV:", value)
+    end
+})
+
+Main:CreateSlider({
+    name = "Smoothness",
+    range = {1, 100},
+    increment = 1,
+    value = 18,
+    callback = function(value)
+        print("Smoothness:", value)
+    end
+})
+
+Main:CreateDropdown({
+    name = "Target Part",
+    options = {"Head", "HumanoidRootPart"},
+    value = "Head",
+    callback = function(value)
+        print("Target:", value)
+    end
+})
+
+Main:CreateToggle({
+    name = "Team Check",
+    value = false,
+    callback = function(value)
+        print("Team Check:", value)
+    end
+})
+
+Window:Notify({
+    title = "Odin Hub",
+    content = "Rayfield Gen2 loaded successfully!",
+})
