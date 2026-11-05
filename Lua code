@@ -1,147 +1,318 @@
-
--- PURPLE NIGHT GUI
--- Roblox Studio - LocalScript
+-- LocalScript -> StarterPlayer > StarterPlayerScripts
+-- Dev/testing tool for your own game: ESP, aim assist, hitbox control + custom UI.
+-- RightShift toggles the menu. Hold Right Mouse Button to aim.
 
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local player = Players.LocalPlayer
-local enabled = true
-local espEnabled = false
-local lockEnabled = false
-local triggerEnabled = false
-local highlights = {}
+local lp = Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
+-- Same allow-list as the server script
+local ALLOWED = {
+	-- [123456789] = true,
+}
+if not (RunService:IsStudio() or lp.UserId == game.CreatorId or ALLOWED[lp.UserId]) then
+	return
+end
+
+local remote = ReplicatedStorage:WaitForChild("DevToolsEvent")
+
+local state = {
+	esp = false,
+	aimbot = false,
+	hitbox = false,
+	hitboxSize = 10,
+	fov = 150,
+	smooth = 0.25,
+	teamCheck = true,
+	wallCheck = true,
+}
+
+---------------------------------------------------------------------
+-- UI
+---------------------------------------------------------------------
 local gui = Instance.new("ScreenGui")
-gui.Name = "PurpleNight"
+gui.Name = "DevToolsUI"
 gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
+gui.Parent = lp:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(270, 310)
-main.Position = UDim2.new(0.5, -135, 0.5, -155)
-main.BackgroundColor3 = Color3.fromRGB(18, 14, 28)
+main.Size = UDim2.fromOffset(250, 340)
+main.Position = UDim2.fromOffset(40, 120)
+main.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
 main.BorderSizePixel = 0
-main.Active = true
-main.Draggable = true
 main.Parent = gui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = main
-
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(160, 70, 255)
-stroke.Thickness = 2
-stroke.Parent = main
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(110, 90, 255)
+stroke.Thickness = 1.5
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 45)
-title.BackgroundColor3 = Color3.fromRGB(48, 25, 75)
-title.Text = "PURPLE NIGHT"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextSize = 20
+title.Size = UDim2.new(1, 0, 0, 34)
+title.BackgroundColor3 = Color3.fromRGB(110, 90, 255)
+title.BorderSizePixel = 0
+title.Text = "  Dev Tools"
+title.TextXAlignment = Enum.TextXAlignment.Left
 title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextColor3 = Color3.new(1, 1, 1)
 title.Parent = main
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
 
-local function makeButton(name, y, callback)
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, -30, 0, 38)
-    button.Position = UDim2.fromOffset(15, y)
-    button.BackgroundColor3 = Color3.fromRGB(65, 35, 100)
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.TextSize = 14
-    button.Font = Enum.Font.GothamBold
-    button.Text = name .. " : OFF"
-    button.AutoButtonColor = true
-    button.Parent = main
+local list = Instance.new("Frame")
+list.Position = UDim2.fromOffset(10, 44)
+list.Size = UDim2.new(1, -20, 1, -54)
+list.BackgroundTransparency = 1
+list.Parent = main
+local layout = Instance.new("UIListLayout", list)
+layout.Padding = UDim.new(0, 8)
 
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = button
-
-    button.MouseButton1Click:Connect(function()
-        local state = callback()
-        button.Text = name .. (state and " : ON" or " : OFF")
-        button.BackgroundColor3 = state
-            and Color3.fromRGB(130, 55, 210)
-            or Color3.fromRGB(65, 35, 100)
-    end)
-
-    return button
+-- Dragging
+do
+	local dragging, dragStart, startPos
+	title.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging, dragStart, startPos = true, i.Position, main.Position
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - dragStart
+			main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
 end
 
-makeButton("MASTER", 60, function()
-    enabled = not enabled
-    return enabled
-end)
+local ON, OFF = Color3.fromRGB(80, 200, 120), Color3.fromRGB(50, 50, 64)
 
-makeButton("NPC ESP", 108, function()
-    espEnabled = not espEnabled
-    return espEnabled
-end)
-
-makeButton("TARGET LOCK", 156, function()
-    lockEnabled = not lockEnabled
-    return lockEnabled
-end)
-
-makeButton("TRIGGER MODE", 204, function()
-    triggerEnabled = not triggerEnabled
-    return triggerEnabled
-end)
-
-local close = Instance.new("TextButton")
-close.Size = UDim2.fromOffset(30, 30)
-close.Position = UDim2.new(1, -35, 0, 7)
-close.Text = "X"
-close.TextColor3 = Color3.new(1, 1, 1)
-close.BackgroundColor3 = Color3.fromRGB(130, 40, 70)
-close.Parent = main
-
-close.MouseButton1Click:Connect(function()
-    main.Visible = false
-end)
-
--- Reopen GUI with RightShift
-UIS.InputBegan:Connect(function(input, processed)
-    if not processed and input.KeyCode == Enum.KeyCode.RightShift then
-        main.Visible = not main.Visible
-    end
-end)
-
--- NPC ESP
-local function updateESP()
-    for _, npc in ipairs(workspace:GetChildren()) do
-        if npc:IsA("Model")
-        and npc:FindFirstChildOfClass("Humanoid")
-        and npc ~= player.Character then
-
-            local highlight = highlights[npc]
-
-            if espEnabled and enabled then
-                if not highlight then
-                    highlight = Instance.new("Highlight")
-                    highlight.FillColor = Color3.fromRGB(150, 60, 255)
-                    highlight.OutlineColor = Color3.fromRGB(220, 180, 255)
-                    highlight.Parent = npc
-                    highlights[npc] = highlight
-                end
-                highlight.Enabled = true
-            elseif highlight then
-                highlight.Enabled = false
-            end
-        end
-    end
+local function makeToggle(text, key, callback)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, 0, 0, 32)
+	b.BackgroundColor3 = state[key] and ON or OFF
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.GothamMedium
+	b.TextSize = 14
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Parent = list
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+	local function refresh()
+		b.Text = text .. ": " .. (state[key] and "ON" or "OFF")
+		b.BackgroundColor3 = state[key] and ON or OFF
+	end
+	refresh()
+	b.MouseButton1Click:Connect(function()
+		state[key] = not state[key]
+		refresh()
+		if callback then callback() end
+	end)
 end
+
+local function makeInput(text, key, min, max, callback)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 32)
+	row.BackgroundTransparency = 1
+	row.Parent = list
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.6, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 14
+	label.TextColor3 = Color3.fromRGB(220, 220, 230)
+	label.Parent = row
+
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(0.4, 0, 1, 0)
+	box.Position = UDim2.fromScale(0.6, 0)
+	box.BackgroundColor3 = OFF
+	box.BorderSizePixel = 0
+	box.Text = tostring(state[key])
+	box.Font = Enum.Font.GothamMedium
+	box.TextSize = 14
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.ClearTextOnFocus = false
+	box.Parent = row
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+
+	box.FocusLost:Connect(function()
+		local n = tonumber(box.Text)
+		if n then
+			state[key] = math.clamp(n, min, max)
+			if callback then callback() end
+		end
+		box.Text = tostring(state[key])
+	end)
+end
+
+local function sendHitbox()
+	remote:FireServer(state.hitbox, state.hitboxSize)
+end
+
+---------------------------------------------------------------------
+-- ESP (Highlight + name/health billboard)
+---------------------------------------------------------------------
+local espFolder = {} -- [player] = {highlight, billboard, label}
+
+local function removeESP(plr)
+	local e = espFolder[plr]
+	if e then
+		e.highlight:Destroy()
+		e.billboard:Destroy()
+		espFolder[plr] = nil
+	end
+end
+
+local function addESP(plr)
+	removeESP(plr)
+	local char = plr.Character
+	if plr == lp or not char then return end
+	local head = char:FindFirstChild("Head")
+	if not head then return end
+
+	local hl = Instance.new("Highlight")
+	hl.FillColor = Color3.fromRGB(255, 70, 70)
+	hl.FillTransparency = 0.6
+	hl.OutlineColor = Color3.new(1, 1, 1)
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent = char
+
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(140, 36)
+	bb.StudsOffset = Vector3.new(0, 2.5, 0)
+	bb.AlwaysOnTop = true
+	bb.Adornee = head
+	bb.Parent = char
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 13
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextStrokeTransparency = 0.4
+	label.Parent = bb
+
+	espFolder[plr] = { highlight = hl, billboard = bb, label = label }
+end
+
+local function refreshESP()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if state.esp then addESP(plr) else removeESP(plr) end
+	end
+end
+
+local function hookPlayer(plr)
+	plr.CharacterAdded:Connect(function()
+		task.wait(0.5)
+		if state.esp then addESP(plr) end
+	end)
+end
+for _, p in ipairs(Players:GetPlayers()) do hookPlayer(p) end
+Players.PlayerAdded:Connect(hookPlayer)
+Players.PlayerRemoving:Connect(removeESP)
 
 RunService.Heartbeat:Connect(function()
-    updateESP()
+	if not state.esp then return end
+	for plr, e in pairs(espFolder) do
+		local char = plr.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hum and hrp and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+			local dist = (lp.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
+			e.label.Text = string.format("%s\n%d HP | %dm", plr.DisplayName, hum.Health, dist)
+		end
+	end
+end)
 
-    if not enabled then
-        for _, highlight in pairs(highlights) do
-            highlight.Enabled = false
-        end
-    end
+---------------------------------------------------------------------
+-- Aimbot (hold RMB)
+---------------------------------------------------------------------
+local fovCircle = Instance.new("Frame")
+fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+fovCircle.BackgroundTransparency = 1
+fovCircle.Visible = false
+fovCircle.Parent = gui
+Instance.new("UICorner", fovCircle).CornerRadius = UDim.new(1, 0)
+local fovStroke = Instance.new("UIStroke", fovCircle)
+fovStroke.Color = Color3.new(1, 1, 1)
+fovStroke.Thickness = 1
+
+local function visible(head, char)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { lp.Character }
+	local origin = camera.CFrame.Position
+	local result = workspace:Raycast(origin, head.Position - origin, params)
+	return result == nil or result.Instance:IsDescendantOf(char)
+end
+
+local function getTarget()
+	local mouse = UIS:GetMouseLocation()
+	local best, bestDist = nil, state.fov
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= lp and plr.Character then
+			local char = plr.Character
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			local head = char:FindFirstChild("Head")
+			if hum and head and hum.Health > 0 then
+				if not (state.teamCheck and lp.Team ~= nil and plr.Team == lp.Team) then
+					local pos, onScreen = camera:WorldToViewportPoint(head.Position)
+					if onScreen then
+						local d = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
+						if d < bestDist and (not state.wallCheck or visible(head, char)) then
+							best, bestDist = head, d
+						end
+					end
+				end
+			end
+		end
+	end
+	return best
+end
+
+RunService.RenderStepped:Connect(function()
+	camera = workspace.CurrentCamera
+	fovCircle.Visible = state.aimbot
+	if state.aimbot then
+		local m = UIS:GetMouseLocation()
+		fovCircle.Size = UDim2.fromOffset(state.fov * 2, state.fov * 2)
+		fovCircle.Position = UDim2.fromOffset(m.X, m.Y)
+		if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+			local target = getTarget()
+			if target then
+				local goal = CFrame.lookAt(camera.CFrame.Position, target.Position)
+				camera.CFrame = camera.CFrame:Lerp(goal, state.smooth)
+			end
+		end
+	end
+end)
+
+---------------------------------------------------------------------
+-- Build menu
+---------------------------------------------------------------------
+makeToggle("ESP", "esp", refreshESP)
+makeToggle("Aimbot (hold RMB)", "aimbot")
+makeToggle("Hitboxes", "hitbox", sendHitbox)
+makeToggle("Team Check", "teamCheck")
+makeToggle("Wall Check", "wallCheck")
+makeInput("Hitbox Size", "hitboxSize", 2, 30, function()
+	if state.hitbox then sendHitbox() end
+end)
+makeInput("Aim FOV", "fov", 20, 800)
+makeInput("Smoothness", "smooth", 0.05, 1)
+
+UIS.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.RightShift then
+		main.Visible = not main.Visible
+	end
 end)
