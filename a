@@ -1,318 +1,109 @@
--- LocalScript -> StarterPlayer > StarterPlayerScripts
--- Dev/testing tool for your own game: ESP, aim assist, hitbox control + custom UI.
--- RightShift toggles the menu. Hold Right Mouse Button to aim.
+-- LocalScript -> StarterPlayer > StarterPlayerScripts  (your own game only)
+-- RightShift = show/hide menu | Hold RMB = aim
+local ALLOWED = {} -- friends/testers: [123456789] = true,
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local P, R, U, Rep = game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"), game:GetService("ReplicatedStorage")
+local lp = P.LocalPlayer
+if not (R:IsStudio() or lp.UserId == game.CreatorId or ALLOWED[lp.UserId]) then return end
+local cam = workspace.CurrentCamera
+local S = {esp=false, aim=false, hb=false, size=10, fov=150, smooth=0.25, team=true, wall=true}
+local OFFC, ONC = Color3.fromRGB(50,50,64), Color3.fromRGB(80,200,120)
 
-local lp = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+-- UI ---------------------------------------------------------------
+local gui = Instance.new("ScreenGui"); gui.Name="DevTools"; gui.ResetOnSpawn=false; gui.Parent=lp:WaitForChild("PlayerGui")
+local main = Instance.new("Frame"); main.Size=UDim2.fromOffset(240,330); main.Position=UDim2.fromOffset(40,120)
+main.BackgroundColor3=Color3.fromRGB(24,24,32); main.BorderSizePixel=0; main.Parent=gui
+Instance.new("UICorner",main).CornerRadius=UDim.new(0,10)
+local st = Instance.new("UIStroke",main); st.Color=Color3.fromRGB(110,90,255); st.Thickness=1.5
+local bar = Instance.new("TextLabel"); bar.Size=UDim2.new(1,0,0,32); bar.BackgroundColor3=Color3.fromRGB(110,90,255); bar.BorderSizePixel=0
+bar.Text="  Dev Tools"; bar.TextXAlignment=Enum.TextXAlignment.Left; bar.Font=Enum.Font.GothamBold; bar.TextSize=16; bar.TextColor3=Color3.new(1,1,1); bar.Parent=main
+Instance.new("UICorner",bar).CornerRadius=UDim.new(0,10)
+local list = Instance.new("Frame"); list.Position=UDim2.fromOffset(10,42); list.Size=UDim2.new(1,-20,1,-52); list.BackgroundTransparency=1; list.Parent=main
+Instance.new("UIListLayout",list).Padding=UDim.new(0,7)
 
--- Same allow-list as the server script
-local ALLOWED = {
-	-- [123456789] = true,
-}
-if not (RunService:IsStudio() or lp.UserId == game.CreatorId or ALLOWED[lp.UserId]) then
-	return
+local drag, ds, sp
+bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag,ds,sp=true,i.Position,main.Position end end)
+U.InputChanged:Connect(function(i) if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+	local d=i.Position-ds; main.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y) end end)
+U.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end end)
+U.InputBegan:Connect(function(i,p) if not p and i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end end)
+
+local function toggle(text,key,cb)
+	local b=Instance.new("TextButton"); b.Size=UDim2.new(1,0,0,30); b.BorderSizePixel=0; b.Font=Enum.Font.GothamMedium; b.TextSize=14; b.TextColor3=Color3.new(1,1,1); b.Parent=list
+	Instance.new("UICorner",b).CornerRadius=UDim.new(0,6)
+	local function r() b.Text=text..": "..(S[key] and "ON" or "OFF"); b.BackgroundColor3=S[key] and ONC or OFFC end
+	r(); b.MouseButton1Click:Connect(function() S[key]=not S[key]; r(); if cb then cb() end end)
+end
+local function number(text,key,lo,hi,cb)
+	local row=Instance.new("Frame"); row.Size=UDim2.new(1,0,0,30); row.BackgroundTransparency=1; row.Parent=list
+	local l=Instance.new("TextLabel"); l.Size=UDim2.fromScale(.6,1); l.BackgroundTransparency=1; l.Text=text; l.TextXAlignment=Enum.TextXAlignment.Left
+	l.Font=Enum.Font.Gotham; l.TextSize=14; l.TextColor3=Color3.fromRGB(220,220,230); l.Parent=row
+	local t=Instance.new("TextBox"); t.Size=UDim2.fromScale(.4,1); t.Position=UDim2.fromScale(.6,0); t.BackgroundColor3=OFFC; t.BorderSizePixel=0
+	t.Text=tostring(S[key]); t.Font=Enum.Font.GothamMedium; t.TextSize=14; t.TextColor3=Color3.new(1,1,1); t.ClearTextOnFocus=false; t.Parent=row
+	Instance.new("UICorner",t).CornerRadius=UDim.new(0,6)
+	t.FocusLost:Connect(function() local n=tonumber(t.Text); if n then S[key]=math.clamp(n,lo,hi); if cb then cb() end end; t.Text=tostring(S[key]) end)
 end
 
-local remote = ReplicatedStorage:WaitForChild("DevToolsEvent")
+-- Hitbox (also tells the optional server script, if present) ---------
+local function syncServer() local e=Rep:FindFirstChild("DevToolsEvent"); if e then e:FireServer(S.hb,S.size) end end
+toggle("ESP","esp"); toggle("Aimbot (hold RMB)","aim"); toggle("Hitboxes","hb",syncServer)
+toggle("Team Check","team"); toggle("Wall Check","wall")
+number("Hitbox Size","size",2,30,syncServer); number("Aim FOV","fov",20,800); number("Smoothness","smooth",0.05,1)
 
-local state = {
-	esp = false,
-	aimbot = false,
-	hitbox = false,
-	hitboxSize = 10,
-	fov = 150,
-	smooth = 0.25,
-	teamCheck = true,
-	wallCheck = true,
-}
-
----------------------------------------------------------------------
--- UI
----------------------------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "DevToolsUI"
-gui.ResetOnSpawn = false
-gui.Parent = lp:WaitForChild("PlayerGui")
-
-local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(250, 340)
-main.Position = UDim2.fromOffset(40, 120)
-main.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
-main.BorderSizePixel = 0
-main.Parent = gui
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
-local stroke = Instance.new("UIStroke", main)
-stroke.Color = Color3.fromRGB(110, 90, 255)
-stroke.Thickness = 1.5
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 34)
-title.BackgroundColor3 = Color3.fromRGB(110, 90, 255)
-title.BorderSizePixel = 0
-title.Text = "  Dev Tools"
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Font = Enum.Font.GothamBold
-title.TextSize = 16
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Parent = main
-Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
-
-local list = Instance.new("Frame")
-list.Position = UDim2.fromOffset(10, 44)
-list.Size = UDim2.new(1, -20, 1, -54)
-list.BackgroundTransparency = 1
-list.Parent = main
-local layout = Instance.new("UIListLayout", list)
-layout.Padding = UDim.new(0, 8)
-
--- Dragging
-do
-	local dragging, dragStart, startPos
-	title.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging, dragStart, startPos = true, i.Position, main.Position
-		end
-	end)
-	UIS.InputChanged:Connect(function(i)
-		if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-			local d = i.Position - dragStart
-			main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-		end
-	end)
-	UIS.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-end
-
-local ON, OFF = Color3.fromRGB(80, 200, 120), Color3.fromRGB(50, 50, 64)
-
-local function makeToggle(text, key, callback)
-	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(1, 0, 0, 32)
-	b.BackgroundColor3 = state[key] and ON or OFF
-	b.BorderSizePixel = 0
-	b.Font = Enum.Font.GothamMedium
-	b.TextSize = 14
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.Parent = list
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-	local function refresh()
-		b.Text = text .. ": " .. (state[key] and "ON" or "OFF")
-		b.BackgroundColor3 = state[key] and ON or OFF
-	end
-	refresh()
-	b.MouseButton1Click:Connect(function()
-		state[key] = not state[key]
-		refresh()
-		if callback then callback() end
-	end)
-end
-
-local function makeInput(text, key, min, max, callback)
-	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 32)
-	row.BackgroundTransparency = 1
-	row.Parent = list
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0.6, 0, 1, 0)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Font = Enum.Font.Gotham
-	label.TextSize = 14
-	label.TextColor3 = Color3.fromRGB(220, 220, 230)
-	label.Parent = row
-
-	local box = Instance.new("TextBox")
-	box.Size = UDim2.new(0.4, 0, 1, 0)
-	box.Position = UDim2.fromScale(0.6, 0)
-	box.BackgroundColor3 = OFF
-	box.BorderSizePixel = 0
-	box.Text = tostring(state[key])
-	box.Font = Enum.Font.GothamMedium
-	box.TextSize = 14
-	box.TextColor3 = Color3.new(1, 1, 1)
-	box.ClearTextOnFocus = false
-	box.Parent = row
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
-
-	box.FocusLost:Connect(function()
-		local n = tonumber(box.Text)
-		if n then
-			state[key] = math.clamp(n, min, max)
-			if callback then callback() end
-		end
-		box.Text = tostring(state[key])
-	end)
-end
-
-local function sendHitbox()
-	remote:FireServer(state.hitbox, state.hitboxSize)
-end
-
----------------------------------------------------------------------
--- ESP (Highlight + name/health billboard)
----------------------------------------------------------------------
-local espFolder = {} -- [player] = {highlight, billboard, label}
-
-local function removeESP(plr)
-	local e = espFolder[plr]
-	if e then
-		e.highlight:Destroy()
-		e.billboard:Destroy()
-		espFolder[plr] = nil
-	end
-end
-
-local function addESP(plr)
-	removeESP(plr)
-	local char = plr.Character
-	if plr == lp or not char then return end
-	local head = char:FindFirstChild("Head")
-	if not head then return end
-
-	local hl = Instance.new("Highlight")
-	hl.FillColor = Color3.fromRGB(255, 70, 70)
-	hl.FillTransparency = 0.6
-	hl.OutlineColor = Color3.new(1, 1, 1)
-	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	hl.Parent = char
-
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(140, 36)
-	bb.StudsOffset = Vector3.new(0, 2.5, 0)
-	bb.AlwaysOnTop = true
-	bb.Adornee = head
-	bb.Parent = char
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 13
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeTransparency = 0.4
-	label.Parent = bb
-
-	espFolder[plr] = { highlight = hl, billboard = bb, label = label }
-end
-
-local function refreshESP()
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if state.esp then addESP(plr) else removeESP(plr) end
-	end
-end
-
-local function hookPlayer(plr)
-	plr.CharacterAdded:Connect(function()
-		task.wait(0.5)
-		if state.esp then addESP(plr) end
-	end)
-end
-for _, p in ipairs(Players:GetPlayers()) do hookPlayer(p) end
-Players.PlayerAdded:Connect(hookPlayer)
-Players.PlayerRemoving:Connect(removeESP)
-
-RunService.Heartbeat:Connect(function()
-	if not state.esp then return end
-	for plr, e in pairs(espFolder) do
-		local char = plr.Character
-		local hum = char and char:FindFirstChildOfClass("Humanoid")
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if hum and hrp and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-			local dist = (lp.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
-			e.label.Text = string.format("%s\n%d HP | %dm", plr.DisplayName, hum.Health, dist)
+-- ESP + local hitbox loop ------------------------------------------
+R.Heartbeat:Connect(function()
+	local mine = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+	for _, p in ipairs(P:GetPlayers()) do
+		local c = p.Character
+		if p ~= lp and c then
+			local hum, hrp, head = c:FindFirstChildOfClass("Humanoid"), c:FindFirstChild("HumanoidRootPart"), c:FindFirstChild("Head")
+			if S.esp and hum and head then
+				if not c:FindFirstChild("DT_HL") then
+					local h=Instance.new("Highlight"); h.Name="DT_HL"; h.FillColor=Color3.fromRGB(255,70,70); h.FillTransparency=.6
+					h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; h.Parent=c
+					local b=Instance.new("BillboardGui"); b.Name="DT_TAG"; b.Size=UDim2.fromOffset(140,34); b.StudsOffset=Vector3.new(0,2.5,0); b.AlwaysOnTop=true; b.Adornee=head; b.Parent=c
+					local t=Instance.new("TextLabel"); t.Name="L"; t.Size=UDim2.fromScale(1,1); t.BackgroundTransparency=1; t.Font=Enum.Font.GothamBold
+					t.TextSize=13; t.TextColor3=Color3.new(1,1,1); t.TextStrokeTransparency=.4; t.Parent=b
+				end
+				local b = c:FindFirstChild("DT_TAG")
+				if b and hrp and mine then b.L.Text=string.format("%s\n%d HP | %dm",p.DisplayName,hum.Health,(mine.Position-hrp.Position).Magnitude) end
+			elseif not S.esp then
+				for _, n in ipairs({"DT_HL","DT_TAG"}) do local o=c:FindFirstChild(n); if o then o:Destroy() end end
+			end
+			if hrp then
+				if S.hb then hrp:SetAttribute("DT",true); hrp.Size=Vector3.one*S.size; hrp.Transparency=.7; hrp.CanCollide=false
+				elseif hrp:GetAttribute("DT") then hrp:SetAttribute("DT",nil); hrp.Size=Vector3.new(2,2,1); hrp.Transparency=1 end
+			end
 		end
 	end
 end)
 
----------------------------------------------------------------------
--- Aimbot (hold RMB)
----------------------------------------------------------------------
-local fovCircle = Instance.new("Frame")
-fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-fovCircle.BackgroundTransparency = 1
-fovCircle.Visible = false
-fovCircle.Parent = gui
-Instance.new("UICorner", fovCircle).CornerRadius = UDim.new(1, 0)
-local fovStroke = Instance.new("UIStroke", fovCircle)
-fovStroke.Color = Color3.new(1, 1, 1)
-fovStroke.Thickness = 1
+-- Aim assist --------------------------------------------------------
+local ring = Instance.new("Frame"); ring.AnchorPoint=Vector2.new(.5,.5); ring.BackgroundTransparency=1; ring.Parent=gui
+Instance.new("UICorner",ring).CornerRadius=UDim.new(1,0); Instance.new("UIStroke",ring).Color=Color3.new(1,1,1)
 
-local function visible(head, char)
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { lp.Character }
-	local origin = camera.CFrame.Position
-	local result = workspace:Raycast(origin, head.Position - origin, params)
-	return result == nil or result.Instance:IsDescendantOf(char)
+local function seen(head,c)
+	local rp=RaycastParams.new(); rp.FilterType=Enum.RaycastFilterType.Exclude; rp.FilterDescendantsInstances={lp.Character}
+	local o=cam.CFrame.Position; local r=workspace:Raycast(o,head.Position-o,rp)
+	return r==nil or r.Instance:IsDescendantOf(c)
 end
-
-local function getTarget()
-	local mouse = UIS:GetMouseLocation()
-	local best, bestDist = nil, state.fov
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= lp and plr.Character then
-			local char = plr.Character
-			local hum = char:FindFirstChildOfClass("Humanoid")
-			local head = char:FindFirstChild("Head")
-			if hum and head and hum.Health > 0 then
-				if not (state.teamCheck and lp.Team ~= nil and plr.Team == lp.Team) then
-					local pos, onScreen = camera:WorldToViewportPoint(head.Position)
-					if onScreen then
-						local d = (Vector2.new(pos.X, pos.Y) - mouse).Magnitude
-						if d < bestDist and (not state.wallCheck or visible(head, char)) then
-							best, bestDist = head, d
-						end
-					end
-				end
-			end
+local function target()
+	local m, best, bd = U:GetMouseLocation(), nil, S.fov
+	for _, p in ipairs(P:GetPlayers()) do
+		local c=p.Character; local hum=c and c:FindFirstChildOfClass("Humanoid"); local head=c and c:FindFirstChild("Head")
+		if p~=lp and hum and head and hum.Health>0 and not (S.team and lp.Team and p.Team==lp.Team) then
+			local v,on=cam:WorldToViewportPoint(head.Position)
+			if on then local d=(Vector2.new(v.X,v.Y)-m).Magnitude
+				if d<bd and (not S.wall or seen(head,c)) then best,bd=head,d end end
 		end
 	end
 	return best
 end
-
-RunService.RenderStepped:Connect(function()
-	camera = workspace.CurrentCamera
-	fovCircle.Visible = state.aimbot
-	if state.aimbot then
-		local m = UIS:GetMouseLocation()
-		fovCircle.Size = UDim2.fromOffset(state.fov * 2, state.fov * 2)
-		fovCircle.Position = UDim2.fromOffset(m.X, m.Y)
-		if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-			local target = getTarget()
-			if target then
-				local goal = CFrame.lookAt(camera.CFrame.Position, target.Position)
-				camera.CFrame = camera.CFrame:Lerp(goal, state.smooth)
-			end
-		end
-	end
-end)
-
----------------------------------------------------------------------
--- Build menu
----------------------------------------------------------------------
-makeToggle("ESP", "esp", refreshESP)
-makeToggle("Aimbot (hold RMB)", "aimbot")
-makeToggle("Hitboxes", "hitbox", sendHitbox)
-makeToggle("Team Check", "teamCheck")
-makeToggle("Wall Check", "wallCheck")
-makeInput("Hitbox Size", "hitboxSize", 2, 30, function()
-	if state.hitbox then sendHitbox() end
-end)
-makeInput("Aim FOV", "fov", 20, 800)
-makeInput("Smoothness", "smooth", 0.05, 1)
-
-UIS.InputBegan:Connect(function(input, processed)
-	if not processed and input.KeyCode == Enum.KeyCode.RightShift then
-		main.Visible = not main.Visible
+R.RenderStepped:Connect(function()
+	cam=workspace.CurrentCamera; ring.Visible=S.aim
+	if not S.aim then return end
+	local m=U:GetMouseLocation(); ring.Size=UDim2.fromOffset(S.fov*2,S.fov*2); ring.Position=UDim2.fromOffset(m.X,m.Y)
+	if U:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+		local t=target(); if t then cam.CFrame=cam.CFrame:Lerp(CFrame.lookAt(cam.CFrame.Position,t.Position),S.smooth) end
 	end
 end)
