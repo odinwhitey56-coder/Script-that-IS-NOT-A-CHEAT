@@ -1,0 +1,147 @@
+
+-- PURPLE NIGHT GUI
+-- Roblox Studio - LocalScript
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local enabled = true
+local espEnabled = false
+local lockEnabled = false
+local triggerEnabled = false
+local highlights = {}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "PurpleNight"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(270, 310)
+main.Position = UDim2.new(0.5, -135, 0.5, -155)
+main.BackgroundColor3 = Color3.fromRGB(18, 14, 28)
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = main
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(160, 70, 255)
+stroke.Thickness = 2
+stroke.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 45)
+title.BackgroundColor3 = Color3.fromRGB(48, 25, 75)
+title.Text = "PURPLE NIGHT"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 20
+title.Font = Enum.Font.GothamBold
+title.Parent = main
+
+local function makeButton(name, y, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -30, 0, 38)
+    button.Position = UDim2.fromOffset(15, y)
+    button.BackgroundColor3 = Color3.fromRGB(65, 35, 100)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = 14
+    button.Font = Enum.Font.GothamBold
+    button.Text = name .. " : OFF"
+    button.AutoButtonColor = true
+    button.Parent = main
+
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = button
+
+    button.MouseButton1Click:Connect(function()
+        local state = callback()
+        button.Text = name .. (state and " : ON" or " : OFF")
+        button.BackgroundColor3 = state
+            and Color3.fromRGB(130, 55, 210)
+            or Color3.fromRGB(65, 35, 100)
+    end)
+
+    return button
+end
+
+makeButton("MASTER", 60, function()
+    enabled = not enabled
+    return enabled
+end)
+
+makeButton("NPC ESP", 108, function()
+    espEnabled = not espEnabled
+    return espEnabled
+end)
+
+makeButton("TARGET LOCK", 156, function()
+    lockEnabled = not lockEnabled
+    return lockEnabled
+end)
+
+makeButton("TRIGGER MODE", 204, function()
+    triggerEnabled = not triggerEnabled
+    return triggerEnabled
+end)
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(30, 30)
+close.Position = UDim2.new(1, -35, 0, 7)
+close.Text = "X"
+close.TextColor3 = Color3.new(1, 1, 1)
+close.BackgroundColor3 = Color3.fromRGB(130, 40, 70)
+close.Parent = main
+
+close.MouseButton1Click:Connect(function()
+    main.Visible = false
+end)
+
+-- Reopen GUI with RightShift
+UIS.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == Enum.KeyCode.RightShift then
+        main.Visible = not main.Visible
+    end
+end)
+
+-- NPC ESP
+local function updateESP()
+    for _, npc in ipairs(workspace:GetChildren()) do
+        if npc:IsA("Model")
+        and npc:FindFirstChildOfClass("Humanoid")
+        and npc ~= player.Character then
+
+            local highlight = highlights[npc]
+
+            if espEnabled and enabled then
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.FillColor = Color3.fromRGB(150, 60, 255)
+                    highlight.OutlineColor = Color3.fromRGB(220, 180, 255)
+                    highlight.Parent = npc
+                    highlights[npc] = highlight
+                end
+                highlight.Enabled = true
+            elseif highlight then
+                highlight.Enabled = false
+            end
+        end
+    end
+end
+
+RunService.Heartbeat:Connect(function()
+    updateESP()
+
+    if not enabled then
+        for _, highlight in pairs(highlights) do
+            highlight.Enabled = false
+        end
+    end
+end)
