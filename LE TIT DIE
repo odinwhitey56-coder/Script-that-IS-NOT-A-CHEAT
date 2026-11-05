@@ -1,0 +1,351 @@
+
+-- RAYFIELD-INSPIRED AIMBOT + ESP
+-- Roblox Studio | StarterPlayerScripts | LocalScript
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- SETTINGS
+local AimbotEnabled = false
+local ESPEnabled = true
+local TeamCheck = false
+local AimPart = "Head"
+local FOV = 150
+local AimKey = Enum.KeyCode.Q
+local Smoothness = 0.18
+
+local ESPObjects = {}
+
+-- GUI
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "AimESP_GUI"
+Gui.ResetOnSpawn = false
+Gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(260, 340)
+Main.Position = UDim2.new(0, 30, 0.35, 0)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 27)
+Main.BorderSizePixel = 0
+Main.Parent = Gui
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(130, 75, 255)
+Stroke.Thickness = 2
+Stroke.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 48)
+Title.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+Title.Text = "  AIMBOT  +  ESP"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.Parent = Main
+
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 10)
+
+local function MakeButton(text, position, callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, -24, 0, 38)
+    Button.Position = position
+    Button.BackgroundColor3 = Color3.fromRGB(48, 42, 65)
+    Button.TextColor3 = Color3.new(1, 1, 1)
+    Button.Text = text
+    Button.Font = Enum.Font.GothamMedium
+    Button.TextSize = 13
+    Button.Parent = Main
+
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 7)
+
+    Button.MouseButton1Click:Connect(function()
+        callback(Button)
+    end)
+
+    return Button
+end
+
+local AimButton = MakeButton("Aimbot: OFF", UDim2.fromOffset(12, 65), function(b)
+    AimbotEnabled = not AimbotEnabled
+    b.Text = "Aimbot: " .. (AimbotEnabled and "ON" or "OFF")
+end)
+
+local ESPButton = MakeButton("ESP: ON", UDim2.fromOffset(12, 110), function(b)
+    ESPEnabled = not ESPEnabled
+    b.Text = "ESP: " .. (ESPEnabled and "ON" or "OFF")
+
+    for _, objects in pairs(ESPObjects) do
+        objects.Highlight.Enabled = ESPEnabled
+        objects.Billboard.Enabled = ESPEnabled
+    end
+end)
+
+local TeamButton = MakeButton("Team Check: OFF", UDim2.fromOffset(12, 155), function(b)
+    TeamCheck = not TeamCheck
+    b.Text = "Team Check: " .. (TeamCheck and "ON" or "OFF")
+end)
+
+local PartButton = MakeButton("Target: Head", UDim2.fromOffset(12, 200), function(b)
+    AimPart = AimPart == "Head" and "HumanoidRootPart" or "Head"
+    b.Text = "Target: " .. AimPart
+end)
+
+-- FOV SLIDER
+local FOVLabel = Instance.new("TextLabel")
+FOVLabel.Size = UDim2.new(1, -24, 0, 25)
+FOVLabel.Position = UDim2.fromOffset(12, 248)
+FOVLabel.BackgroundTransparency = 1
+FOVLabel.TextColor3 = Color3.new(1, 1, 1)
+FOVLabel.Text = "FOV: 150"
+FOVLabel.Font = Enum.Font.Gotham
+FOVLabel.TextSize = 13
+FOVLabel.Parent = Main
+
+local Slider = Instance.new("TextButton")
+Slider.Size = UDim2.new(1, -24, 0, 22)
+Slider.Position = UDim2.fromOffset(12, 275)
+Slider.BackgroundColor3 = Color3.fromRGB(65, 55, 85)
+Slider.Text = "CLICK TO INCREASE FOV"
+Slider.TextColor3 = Color3.new(1, 1, 1)
+Slider.TextSize = 10
+Slider.Parent = Main
+
+Slider.MouseButton1Click:Connect(function()
+    FOV = FOV + 50
+    if FOV > 350 then FOV = 50 end
+    FOVLabel.Text = "FOV: " .. FOV
+end)
+
+local Help = Instance.new("TextLabel")
+Help.Size = UDim2.new(1, -20, 0, 25)
+Help.Position = UDim2.fromOffset(10, 307)
+Help.BackgroundTransparency = 1
+Help.Text = "Hold Q to aim"
+Help.TextColor3 = Color3.fromRGB(180, 180, 190)
+Help.Font = Enum.Font.Gotham
+Help.TextSize = 12
+Help.Parent = Main
+
+-- DRAGGABLE GUI
+local dragging = false
+local dragStart, startPos
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- FOV CIRCLE
+local Circle = Instance.new("Frame")
+Circle.Name = "FOVCircle"
+Circle.AnchorPoint = Vector2.new(0.5, 0.5)
+Circle.Position = UDim2.fromScale(0.5, 0.5)
+Circle.Size = UDim2.fromOffset(FOV * 2, FOV * 2)
+Circle.BackgroundTransparency = 1
+Circle.Parent = Gui
+
+Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Color = Color3.fromRGB(160, 90, 255)
+CircleStroke.Thickness = 1.5
+CircleStroke.Parent = Circle
+
+-- ESP
+local function AddESP(player)
+    if player == LocalPlayer then return end
+
+    local function SetupCharacter(character)
+        if ESPObjects[player] then
+            ESPObjects[player].Highlight:Destroy()
+            ESPObjects[player].Billboard:Destroy()
+        end
+
+        local humanoid = character:WaitForChild("Humanoid", 5)
+        local head = character:WaitForChild("Head", 5)
+
+        if not humanoid or not head then return end
+
+        local Highlight = Instance.new("Highlight")
+        Highlight.Name = "PlayerESP"
+        Highlight.Adornee = character
+        Highlight.FillColor = Color3.fromRGB(140, 65, 255)
+        Highlight.OutlineColor = Color3.fromRGB(220, 190, 255)
+        Highlight.FillTransparency = 0.7
+        Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        Highlight.Enabled = ESPEnabled
+        Highlight.Parent = character
+
+        local Billboard = Instance.new("BillboardGui")
+        Billboard.Name = "PlayerInfo"
+        Billboard.Adornee = head
+        Billboard.Size = UDim2.fromOffset(180, 45)
+        Billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+        Billboard.AlwaysOnTop = true
+        Billboard.Enabled = ESPEnabled
+        Billboard.Parent = character
+
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.fromScale(1, 1)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.new(1, 1, 1)
+        Label.TextStrokeTransparency = 0.2
+        Label.Font = Enum.Font.GothamBold
+        Label.TextSize = 13
+        Label.Parent = Billboard
+
+        ESPObjects[player] = {
+            Highlight = Highlight,
+            Billboard = Billboard,
+            Label = Label,
+            Humanoid = humanoid
+        }
+    end
+
+    if player.Character then
+        task.spawn(SetupCharacter, player.Character)
+    end
+
+    player.CharacterAdded:Connect(SetupCharacter)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    AddESP(player)
+end
+
+Players.PlayerAdded:Connect(AddESP)
+
+Players.PlayerRemoving:Connect(function(player)
+    local objects = ESPObjects[player]
+    if objects then
+        objects.Highlight:Destroy()
+        objects.Billboard:Destroy()
+        ESPObjects[player] = nil
+    end
+end)
+
+-- AIM INPUT
+local HoldingAim = false
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == AimKey then
+        HoldingAim = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == AimKey then
+        HoldingAim = false
+    end
+end)
+
+-- MAIN LOOP
+RunService.RenderStepped:Connect(function()
+    Camera = workspace.CurrentCamera
+
+    Circle.Size = UDim2.fromOffset(FOV * 2, FOV * 2)
+
+    -- Update ESP
+    for player, objects in pairs(ESPObjects) do
+        if objects.Humanoid and objects.Humanoid.Parent then
+            local hp = math.floor(objects.Humanoid.Health)
+            local maxHP = math.floor(objects.Humanoid.MaxHealth)
+
+            objects.Label.Text = player.Name .. "\nHP: " .. hp .. "/" .. maxHP
+
+            local sameTeam = LocalPlayer.Team ~= nil
+                and player.Team == LocalPlayer.Team
+
+            objects.Highlight.Enabled = ESPEnabled
+            objects.Billboard.Enabled = ESPEnabled
+
+            if TeamCheck and sameTeam then
+                objects.Highlight.FillColor = Color3.fromRGB(60, 180, 100)
+            else
+                objects.Highlight.FillColor = Color3.fromRGB(140, 65, 255)
+            end
+        end
+    end
+
+    -- AIMBOT
+    if not AimbotEnabled or not HoldingAim then return end
+
+    local closestTarget = nil
+    local shortestDistance = FOV
+    local screenCenter = Vector2.new(
+        Camera.ViewportSize.X / 2,
+        Camera.ViewportSize.Y / 2
+    )
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local sameTeam = LocalPlayer.Team ~= nil
+                and player.Team == LocalPlayer.Team
+
+            if not (TeamCheck and sameTeam) then
+                local character = player.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                local part = character and character:FindFirstChild(AimPart)
+
+                if humanoid and humanoid.Health > 0 and part then
+                    local screenPosition, onScreen =
+                        Camera:WorldToViewportPoint(part.Position)
+
+                    if onScreen then
+                        local distance = (
+                            Vector2.new(screenPosition.X, screenPosition.Y)
+                            - screenCenter
+                        ).Magnitude
+
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestTarget = part
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if closestTarget then
+        local targetCFrame = CFrame.lookAt(
+            Camera.CFrame.Position,
+            closestTarget.Position
+        )
+
+        Camera.CFrame = Camera.CFrame:Lerp(
+            targetCFrame,
+            Smoothness
+        )
+    end
+end)
+
+print("Aimbot + ESP loaded!")
